@@ -23,7 +23,7 @@ RUN wget $GTFS_URL -O $ROUTER_PATH/gtfs.zip
 RUN wget $STATE_PBF -O $ROUTER_PATH/base.pbf
 
 #TRIM and clean up OSM data
-RUN osmconvert $ROUTER_PATH/base.pbf -b=-84.949036,33.261657,-83.737793,34.282184 --complete-ways -o=$ROUTER_PATH/trimmed.pbf && rm $ROUTER_PATH/base.pbf
+RUN osmconvert $ROUTER_PATH/base.pbf -b=$BOUNDING_BOX --complete-ways -o=$ROUTER_PATH/trimmed.pbf && rm $ROUTER_PATH/base.pbf
 
 #DOWNLOAD OTP
 RUN wget $OTP_JAR -O otp.jar
