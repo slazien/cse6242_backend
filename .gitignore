@@ -133,3 +133,6 @@ data/
 
 # PyCharm
 .idea/
+
+#OSM cache
+cache/
