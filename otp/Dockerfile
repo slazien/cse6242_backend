@@ -9,7 +9,7 @@ ENV BASE_PATH=otp
 ENV CITY=atlanta
 ENV GTFS_URL=https://www.itsmarta.com/google_transit_feed/google_transit.zip
 ENV STATE_PBF=http://download.geofabrik.de/north-america/us/georgia-latest.osm.pbf
-ENV BOUNDING_BOX=-84.949036,33.261657,-83.737793,34.282184
+ENV BOUNDING_BOX=-84.617195,33.521004,-84.12611,34.010136
 
 #HELPERS
 ENV ROUTER_PATH=$BASE_PATH/graphs/$CITY
@@ -23,15 +23,15 @@ RUN wget $GTFS_URL -O $ROUTER_PATH/gtfs.zip
 RUN wget $STATE_PBF -O $ROUTER_PATH/base.pbf
 
 #TRIM and clean up OSM data
-RUN osmconvert $ROUTER_PATH/base.pbf -b=-84.949036,33.261657,-83.737793,34.282184 --complete-ways -o=$ROUTER_PATH/trimmed.pbf && rm $ROUTER_PATH/base.pbf
+RUN osmconvert $ROUTER_PATH/base.pbf -b=$BOUNDING_BOX --complete-ways -o=$ROUTER_PATH/trimmed.pbf && rm $ROUTER_PATH/base.pbf
 
 #DOWNLOAD OTP
 RUN wget $OTP_JAR -O otp.jar
 
 # BUILD OTP GRAPH
-RUN java -Xmx2G -jar ./otp.jar --build $ROUTER_PATH
+RUN java -Xmx1G -jar ./otp.jar --build $ROUTER_PATH
 
 #SERVE
-CMD java -Xmx2G -jar ./otp.jar --basePath $BASE_PATH --server --router $CITY
+CMD java -Xmx1G -jar ./otp.jar --basePath $BASE_PATH --server --router $CITY
 EXPOSE 8080
 EXPOSE 8081
