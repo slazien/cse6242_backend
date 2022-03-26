@@ -122,7 +122,7 @@ class IsochroneService():
                 resulting_id = res.inserted_primary_key[0]
 
                 #find all h3 indices in the isochrone and save them to DB, too
-                h3s = [h3.polyfill(mapping(polygon), res=self.h3_resolution) for polygon in isochrone.geoms]
+                h3s = [h3.polyfill_geojson(mapping(polygon), res=self.h3_resolution) for polygon in isochrone.geoms]
                 h3s = set().union(*h3s)
                 
 
