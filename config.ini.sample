@@ -1,0 +1,6 @@
+[DB]
+dbname=XXXX
+user=YYYYY
+password=ZZZZZ
+port=5901
+host=localhost
