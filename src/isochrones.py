@@ -96,14 +96,15 @@ class IsochroneService():
             result = cur.fetchone()
             assert result is not None, "The POI with id {} does not exist in city {}, please check".format(poi_id, city_id)
 
+            h3id = result[1]
+
             #isochrone already in DB - return
             if result[2] is not None:                
                 isochrone = to_shape(WKBElement(result[2]))
             
             #compute the isochrone,save to DB and return
             else:
-                cityname = result[0].lower()
-                h3id = result[1]
+                cityname = result[0].lower()                
                 lat, lon = h3.h3_to_geo(h3id)                
                 isochrone = self.compute_isochrone(lat, lon, cityname, time, minutes)
 
@@ -132,5 +133,5 @@ class IsochroneService():
                     [{"catchmentid": resulting_id, "h3id" : h} for h in h3s]
                 )
 
-            return isochrone
+            return isochrone, h3id
         
