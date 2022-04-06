@@ -82,7 +82,7 @@ class IsochroneService():
         #retrieve H3 index and city name of the given POI
         with self.pg_conn.connection.cursor() as cur:
             cur.execute("""
-                SELECT cityName, pois.h3id, catchments.geometry FROM cities 
+                SELECT cityName, pois.h3id, catchments.catchmentid, catchments.geometry FROM cities 
                     JOIN cityh3map ON cities.cityid = cityh3map.cityid 
                     JOIN pois on pois.h3id = cityh3map.h3id
                     LEFT JOIN catchments ON pois.h3id = catchments.originh3id
@@ -97,10 +97,11 @@ class IsochroneService():
             assert result is not None, "The POI with id {} does not exist in city {}, please check".format(poi_id, city_id)
 
             h3id = result[1]
+            catchment_id = result[2]
 
             #isochrone already in DB - return
-            if result[2] is not None:                
-                isochrone = to_shape(WKBElement(result[2]))
+            if catchment_id is not None:                
+                isochrone = to_shape(WKBElement(result[3]))
             
             #compute the isochrone,save to DB and return
             else:
@@ -120,7 +121,7 @@ class IsochroneService():
                     "originh3id":h3id}
                 ]
                 res = self.pg_conn.execute(catchments.insert(), vals)
-                resulting_id = res.inserted_primary_key[0]
+                catchment_id = res.inserted_primary_key[0]
 
                 #find all h3 indices in the isochrone and save them to DB, too
                 h3s = [h3.polyfill_geojson(mapping(polygon), res=self.h3_resolution) for polygon in isochrone.geoms]
@@ -130,8 +131,8 @@ class IsochroneService():
                 catchment_map = Table('catchmenth3map', metadata)
                 self.pg_conn.execute(
                     catchment_map.insert(), 
-                    [{"catchmentid": resulting_id, "h3id" : h} for h in h3s]
+                    [{"catchmentid": catchment_id, "h3id" : h} for h in h3s]
                 )
 
-            return isochrone, h3id
+            return isochrone, h3id, catchment_id
         
