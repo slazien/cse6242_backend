@@ -235,13 +235,13 @@ class backendApi:
             """ Returns catchment area geometry and associated population details"""
             with self.get_alchemy_engine().connect() as conn:
                 service = isc.IsochroneService(otp_port=8062, pg_conn=conn)    
-                isochrone, origin_h3id = service.get_isochrone(city_id = city_id, poi_id = poi_id, time=time_of_day)
+                isochrone, origin_h3id, catchment_id = service.get_isochrone(city_id = city_id, poi_id = poi_id, time=time_of_day)
                 
                 with conn.connection.cursor(cursor_factory=DictCursor) as cur:
                     sql = 'SELECT groupname, population FROM api_get_demographics_for_catchment(%s, %s, %s)'            
-                    cur.execute(sql, (city_id, demographics_category, origin_h3id))
+                    cur.execute(sql, (city_id, demographics_category, catchment_id))
                     data = cur.fetchall()
-            
+                    
             population_details = {row['groupname']: row['population'] for row in data}
             population_total = sum(population_details.values())
             area = CatchmentArea.construct(
