@@ -1,11 +1,10 @@
-from ast import Mult
-from urllib import response
-from fastapi import FastAPI
+from fastapi import FastAPI, Body
 import psycopg2 as pg
 from psycopg2.extras import DictCursor
 
 import asyncio
 from pydantic import BaseModel
+from enum import Enum
 from typing import Dict, List, Optional, Tuple
 import sys
 sys.path.append("../")
@@ -37,7 +36,7 @@ class backendApi:
         
         class City(BaseModel):
             name: str
-            ID: int
+            id: int
 
         
         @app.get("/cities", response_model=List[City])
@@ -48,7 +47,7 @@ class backendApi:
                 with conn.cursor() as cur:
                     cur.execute("SELECT cityID, cityname FROM cities")
                     data = cur.fetchall()
-            citiesList = [{"ID": d[0], "Name": d[1]} for d in data]            
+            citiesList = [{"id": d[0], "name": d[1]} for d in data]            
             return citiesList
 
         
@@ -100,7 +99,7 @@ class backendApi:
                 demographic_categories(),
             )
 
-            labels = ['cities', 'times_of_day', 'poi_categories', 'demographic_segments']
+            labels = ['cities', 'times_of_day', 'poi_categories', 'demographic_categories']
             config_values = dict(zip(labels, res))
 
             return config_values
@@ -223,5 +222,49 @@ class backendApi:
             """Returns overall city accessibility statistics and a breakdown by demographics category"""
             return CityStats(index_total = 100.0, index_detail = {"foo": 50.0, "bar": 100.0})
 
+        class ConfigSet(BaseModel):
+            poi_category: str
+            demographic_category: str
+            time_of_day: str
 
+        class DataFields(str, Enum):
+            pois = 'poi_category'
+            demographics = 'demographic_category'
+            poi_list = 'poi_list' 
+            time_of_day = 'time_of_day'           
+        
+        class UpdatePack(BaseModel):
+            changed: List[DataFields]
+            config: ConfigSet
+            poi_list: List[str]
+
+        class CityData(BaseModel):
+            demographics: Optional[List[H3Grid]]
+            pois: Optional[List[POI]]
+            stats: Optional[CityStats]
+
+
+        @app.post("/city_data/{city_id}", response_model=CityData)
+        async def get_city_data(city_id, update_pack: UpdatePack = Body(..., embed=False)):
+            queries = {}
+
+            if DataFields.demographics in update_pack.changed:
+                queries['demographics'] = get_city_demographics(city_id=city_id, demographics_category=update_pack.config.demographic_category, detailed=True)
+            
+            if DataFields.pois in update_pack.changed:
+                queries['pois'] = get_pois_in_city(city_id = city_id, poi_category= update_pack.config.poi_category)
+                        
+            if len(update_pack.changed) > 0:
+                queries['stats'] = get_city_accessibility_statistics(
+                    city_id=city_id, 
+                    demographics_category=update_pack.config.demographic_category, 
+                    time_of_day = update_pack.config.time_of_day, 
+                    poi_category = update_pack.config.poi_category
+                )
+                
+            
+            results = await asyncio.gather(*queries.values())            
+            dict_results = dict(zip(queries.keys(), results))
+            return CityData(** dict_results)
+            
         return app
