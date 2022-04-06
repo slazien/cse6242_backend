@@ -37,7 +37,7 @@ class backendApi:
         
         class City(BaseModel):
             name: str
-            ID: int
+            id: int
 
         
         @app.get("/cities", response_model=List[City])
@@ -48,7 +48,7 @@ class backendApi:
                 with conn.cursor() as cur:
                     cur.execute("SELECT cityID, cityname FROM cities")
                     data = cur.fetchall()
-            citiesList = [{"ID": d[0], "Name": d[1]} for d in data]            
+            citiesList = [{"id": d[0], "name": d[1]} for d in data]            
             return citiesList
 
         
@@ -100,7 +100,7 @@ class backendApi:
                 demographic_categories(),
             )
 
-            labels = ['cities', 'times_of_day', 'poi_categories', 'demographic_segments']
+            labels = ['cities', 'times_of_day', 'poi_categories', 'demographic_categories']
             config_values = dict(zip(labels, res))
 
             return config_values
@@ -223,5 +223,12 @@ class backendApi:
             """Returns overall city accessibility statistics and a breakdown by demographics category"""
             return CityStats(index_total = 100.0, index_detail = {"foo": 50.0, "bar": 100.0})
 
-
+        async def get_city_data(city_id, update_pack):
+            update_pack = {
+                'init': True,
+                'poi_data': 1,
+                'config': {
+                    'time_of_day': 2,
+                }
+            }
         return app
