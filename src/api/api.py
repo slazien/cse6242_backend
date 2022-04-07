@@ -266,6 +266,7 @@ class backendApi:
             poi_category: str
             demographic_category: str
             time_of_day: str
+            city_id: int
 
         class DataFields(str, Enum):
             pois = 'poi_category'
@@ -284,9 +285,10 @@ class backendApi:
             stats: Optional[CityStats]
 
 
-        @app.post("/city_data/{city_id}", response_model=CityData)
-        async def get_city_data(city_id, update_pack: UpdatePack = Body(..., embed=False)):
+        @app.post("/city_data/", response_model=CityData)
+        async def get_city_data(update_pack: UpdatePack = Body(..., embed=False)):
             queries = {}
+            city_id = update_pack.config.city_id
 
             if DataFields.demographics in update_pack.changed:
                 queries['demographics'] = get_city_demographics(
