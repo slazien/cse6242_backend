@@ -149,13 +149,17 @@ class backendApi:
             data: List[POI]
 
         @app.get("/pois/{city_id}/{poi_category}", response_model = POIList)
-        async def get_pois_in_city(city_id: int, poi_category: str, native: bool = False):
+        async def get_pois_in_city(city_id: int, poi_category: str, native: bool = False, pois_to_exclude = []):
             """Get all POIs of a given category in a city.
             """
             with self.get_db_connection() as conn:
                 with conn.cursor(cursor_factory=DictCursor) as cur:
-                    sql = 'SELECT id, h3id, name, lat, long, category FROM api_get_pois_for_city(%s, %s)'                    
-                    cur.execute(sql, (city_id, poi_category))
+                    if pois_to_exclude:
+                        sql = 'SELECT id, h3id, name, lat, long, category FROM api_get_pois_for_city(%s, %s) WHERE h3id NOT IN %s'                    
+                        cur.execute(sql, (city_id, poi_category, tuple(pois_to_exclude)))
+                    else:
+                        sql = 'SELECT id, h3id, name, lat, long, category FROM api_get_pois_for_city(%s, %s)'                    
+                        cur.execute(sql, (city_id, poi_category))
                     response = POIList.construct(data = [])
                     data = cur.fetchall()                  
                     for row in data:                        
@@ -258,9 +262,26 @@ class backendApi:
 
 
         @app.get("/city_stats/{city_id}", response_model = CityStats)
-        async def get_city_accessibility_statistics(city_id, demographics_category, time_of_day, poi_category):
-            """Returns overall city accessibility statistics and a breakdown by demographics category"""
-            return CityStats(index_total = 100.0, index_detail = {"foo": 50.0, "bar": 100.0})
+        async def get_city_accessibility_statistics(
+            city_id, 
+            demographics_category, 
+            time_of_day, 
+            poi_category, 
+            pois_added = [],
+            pois_removed = []
+        ):  
+            """Returns overall city accessibility statistics and a breakdown by demographics category"""          
+            with self.get_db_connection() as conn:                
+                with conn.cursor(cursor_factory=DictCursor) as cur:                    
+                    sql = 'SELECT groupn, metric, population FROM api_get_city_stats(%s, %s, %s, %s, %s, %s)'                    
+                    cur.execute(sql, 
+                    (city_id, poi_category, time_of_day, demographics_category, pois_removed, pois_added))                    
+                    data = cur.fetchall()
+                    details = {d['groupn'] : d['metric'] for d in data}
+                    total = sum(d['metric'] * d['population'] for d in data) / sum([d['population'] for d in data])
+
+            
+            return CityStats(index_total = total, index_detail = details)
 
         class ConfigSet(BaseModel):
             poi_category: str
@@ -271,12 +292,16 @@ class backendApi:
             pois = 'poi_category'
             demographics = 'demographic_category'
             poi_list = 'poi_list' 
-            time_of_day = 'time_of_day'           
+            time_of_day = 'time_of_day'
+
+        class UpdatedPois(BaseModel):
+            added: Optional[List[str]]
+            deleted: Optional[List[str]]
         
         class UpdatePack(BaseModel):
             changed: List[DataFields]
             config: ConfigSet
-            poi_list: List[str]
+            poi_list: UpdatedPois
 
         class CityData(BaseModel):
             demographics: Optional[H3List]
@@ -296,19 +321,22 @@ class backendApi:
                     native=True
                 )
             
-            if DataFields.pois in update_pack.changed:
+            if DataFields.pois in update_pack.changed or update_pack.poi_list.deleted:
                 queries['pois'] = get_pois_in_city(
                     city_id = city_id, 
                     poi_category= update_pack.config.poi_category,
-                    native=True
+                    native=True,
+                    pois_to_exclude=update_pack.poi_list.deleted
                 )
                         
-            if len(update_pack.changed) > 0:
+            if update_pack.changed or update_pack.poi_list.added or update_pack.poi_list.deleted:
                 queries['stats'] = get_city_accessibility_statistics(
                     city_id=city_id, 
                     demographics_category=update_pack.config.demographic_category, 
                     time_of_day = update_pack.config.time_of_day, 
-                    poi_category = update_pack.config.poi_category
+                    poi_category = update_pack.config.poi_category,
+                    pois_added=update_pack.poi_list.added,
+                    pois_removed=update_pack.poi_list.deleted
                 )
                             
             results = await asyncio.gather(*queries.values())            
