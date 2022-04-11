@@ -258,9 +258,25 @@ class backendApi:
 
 
         @app.get("/city_stats/{city_id}", response_model = CityStats)
-        async def get_city_accessibility_statistics(city_id, demographics_category, time_of_day, poi_category):
+        async def get_city_accessibility_statistics(
+            city_id, 
+            demographics_category, 
+            time_of_day, 
+            poi_category, 
+            pois_added = [],
+            pois_removed = []
+        ):            
+            with self.get_db_connection() as conn:                
+                with conn.cursor(cursor_factory=DictCursor) as cur:                    
+                    sql = 'SELECT groupn, metric, population FROM api_get_city_stats(%s, %s, %s, %s, %s, %s)'                    
+                    cur.execute(sql, 
+                    (city_id, poi_category, time_of_day, demographics_category, pois_removed, pois_added))                    
+                    data = cur.fetchall()
+                    details = {d['groupn'] : d['metric'] for d in data}
+                    total = sum(d['metric'] * d['population'] for d in data) / sum([d['population'] for d in data])
+
             """Returns overall city accessibility statistics and a breakdown by demographics category"""
-            return CityStats(index_total = 100.0, index_detail = {"foo": 50.0, "bar": 100.0})
+            return CityStats(index_total = total, index_detail = details)
 
         class ConfigSet(BaseModel):
             poi_category: str
@@ -272,12 +288,16 @@ class backendApi:
             pois = 'poi_category'
             demographics = 'demographic_category'
             poi_list = 'poi_list' 
-            time_of_day = 'time_of_day'           
+            time_of_day = 'time_of_day'
+
+        class UpdatedPois(BaseModel):
+            added: Optional[List[str]]
+            deleted: Optional[List[str]]
         
         class UpdatePack(BaseModel):
             changed: List[DataFields]
             config: ConfigSet
-            poi_list: List[str]
+            poi_list: UpdatedPois
 
         class CityData(BaseModel):
             demographics: Optional[H3List]
