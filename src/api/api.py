@@ -58,7 +58,7 @@ class backendApi:
 
     def get_alchemy_engine(self):
         conn_string = 'postgresql://{user}:{password}@{host}:{port}/{dbname}'.format(**self.db_params)
-        return create_engine(conn_string, echo=False)
+        return create_engine(conn_string, echo=False, future=True)
 
     def get_app(self):
         app = FastAPI()
@@ -238,7 +238,7 @@ class backendApi:
         async def get_catchment_details(city_id, h3_id, time_of_day, demographics_category):
             """ Returns catchment area geometry and associated population details"""
             with self.get_alchemy_engine().connect() as conn:
-                service = isc.IsochroneService(otp_port=8062, pg_conn=conn)    
+                service = isc.IsochroneService(otp_port=8062, pg_conn=self.get_alchemy_engine().connect()   )    
                 isochrone, origin_h3id, catchment_id = service.get_isochrone(city_id = city_id, h3_id = h3_id, time=time_of_day)
                 
                 with conn.connection.cursor(cursor_factory=DictCursor) as cur:
