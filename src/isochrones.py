@@ -5,6 +5,7 @@ import requests
 import geopandas as gpd
 import h3
 from shapely.geometry import Polygon, MultiPolygon, mapping
+from sqlalchemy import text
 
 class IsochroneService():
 
@@ -128,12 +129,14 @@ class IsochroneService():
                 catchment_map.insert(), 
                 [{"catchmentid": catchment_id, "h3id" : h} for h in h3s]
             )
+            self.pg_conn.commit()
             #calculate catchment statistics and add them to the catchment_stats table and step1_stats table, too
             self.update_stats(catchment_id)                
 
         return isochrone, h3_id, catchment_id
     
     def update_stats(self, catchment_id):
+        
         catchment_stats = """
         WITH all_h3_ids as (
             SELECT 		
@@ -149,7 +152,7 @@ class IsochroneService():
                 catchments.catchmentid,
                 catchmenth3map.h3id
             FROM catchments
-            JOIN catchmenth3map ON catchmenth3map.catchmentid = catchments.catchmentid WHERE catchments.catchmentid = %s
+            JOIN catchmenth3map ON catchmenth3map.catchmentid = catchments.catchmentid WHERE catchments.catchmentid = :catchment_id
         )
 
         INSERT INTO catchment_stats (catchmentid, categorytype, groupname, population)
@@ -157,45 +160,53 @@ class IsochroneService():
                 FROM all_h3_ids as h
                 JOIN catchmenth3_ids as c ON c.h3id = h.h3id
                 GROUP BY c.catchmentid, h.categorytype, h.groupname;
-
-        WITH step1 AS (
-         SELECT 
-                c3m.h3id,                
-                catchments.timeofday,
-                catchments.catchmentid,
-                catchment_stats.categorytype,		 
-				CASE 
-            		WHEN SUM(catchment_stats.population) = 0
-            		THEN 0 
-            		ELSE 10000 / SUM(catchment_stats.population) 
-            		END AS ratio
-         FROM catchments
-		 JOIN catchment_stats
-         	ON catchment_stats.catchmentid = catchments.catchmentid                
-         JOIN catchmenth3map c3m 
-		 	ON catchment_stats.catchmentid = c3m.catchmentid
-        WHERE c3m.catchmentid = %s
-		 GROUP BY 
-		 	c3m.h3id,                
-            catchments.timeofday,
-            catchments.catchmentid,
-            catchment_stats.categorytype
-     )
-	 
-	 INSERT INTO step1_stats 
-	 (h3id,		
-			timeofday,
-			categorytype,			
-			catchmentid,
-			ratio
-	 )
-	 	SELECT 
-            h3id,		
-			timeofday,
-			categorytype,			
-			catchmentid,
-			ratio
-		 FROM step1;
+        
         """
-        with self.pg_conn.connection.cursor() as cur:
-            cur.execute(catchment_stats, (catchment_id, catchment_id))
+
+        step1_stats = """
+        WITH step1 AS (
+                SELECT 
+                        c3m.h3id,                
+                        catchments.timeofday,
+                        catchments.catchmentid,
+                        catchment_stats.categorytype,		 
+                        CASE 
+                            WHEN SUM(catchment_stats.population) = 0
+                            THEN 0 
+                            ELSE 10000 / SUM(catchment_stats.population) 
+                            END AS ratio
+                FROM catchments
+                JOIN catchment_stats
+                    ON catchment_stats.catchmentid = catchments.catchmentid                
+                JOIN catchmenth3map c3m 
+                    ON catchment_stats.catchmentid = c3m.catchmentid
+                WHERE c3m.catchmentid = :catchment_id
+                GROUP BY 
+                    c3m.h3id,                
+                    catchments.timeofday,
+                    catchments.catchmentid,
+                    catchment_stats.categorytype
+            )
+            
+            INSERT INTO step1_stats 
+            (h3id,		
+                    timeofday,
+                    categorytype,			
+                    catchmentid,
+                    ratio
+            )
+                SELECT 
+                    h3id,		
+                    timeofday,
+                    categorytype,			
+                    catchmentid,
+                    ratio
+                FROM step1
+        """
+        
+        print("HEREERERERE", catchment_id)
+    
+        self.pg_conn.execute(text(catchment_stats), [{'catchment_id': catchment_id}])
+        self.pg_conn.commit()        
+        self.pg_conn.execute(text(step1_stats), [{'catchment_id': catchment_id}])
+        self.pg_conn.commit()
