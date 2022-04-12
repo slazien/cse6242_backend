@@ -58,7 +58,7 @@ class backendApi:
 
     def get_alchemy_engine(self):
         conn_string = 'postgresql://{user}:{password}@{host}:{port}/{dbname}'.format(**self.db_params)
-        return create_engine(conn_string, echo=False)
+        return create_engine(conn_string, echo=False, future=True)
 
     def get_app(self):
         app = FastAPI()
@@ -229,27 +229,27 @@ class backendApi:
         
         class CatchmentArea(BaseModel):
             origin_h3id: str            
-            population_total: float
+            population_total: float            
             population_detail: dict
             geometry: MultiPolygon
             
 
-        @app.get("/catchment/{city_id}/{poi_id}", response_model = CatchmentArea)
-        async def get_catchment_details(city_id, poi_id, time_of_day, demographics_category):
+        @app.get("/catchment/{city_id}/{h3_id}", response_model = CatchmentArea)
+        async def get_catchment_details(city_id, h3_id, time_of_day, demographics_category):
             """ Returns catchment area geometry and associated population details"""
             with self.get_alchemy_engine().connect() as conn:
-                service = isc.IsochroneService(otp_port=8062, pg_conn=conn)    
-                isochrone, origin_h3id, catchment_id = service.get_isochrone(city_id = city_id, poi_id = poi_id, time=time_of_day)
+                service = isc.IsochroneService(otp_port=8062, pg_conn=self.get_alchemy_engine().connect()   )    
+                isochrone, origin_h3id, catchment_id = service.get_isochrone(city_id = city_id, h3_id = h3_id, time=time_of_day)
                 
                 with conn.connection.cursor(cursor_factory=DictCursor) as cur:
                     sql = 'SELECT groupname, population FROM api_get_demographics_for_catchment(%s, %s)'            
                     cur.execute(sql, (demographics_category, catchment_id))
-                    data = cur.fetchall()
-                    
+                    data = cur.fetchall()                    
+                                
             population_details = {row['groupname']: row['population'] for row in data}
             population_total = sum(population_details.values())
             area = CatchmentArea.construct(
-                geometry = mapping(isochrone), 
+                geometry = mapping(isochrone),                
                 origin_h3id = origin_h3id,
                 population_total = population_total,
                 population_detail = population_details,
