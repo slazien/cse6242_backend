@@ -202,9 +202,7 @@ class IsochroneService():
                     catchmentid,
                     ratio
                 FROM step1
-        """
-        
-        print("HEREERERERE", catchment_id)
+        """        
     
         self.pg_conn.execute(text(catchment_stats), [{'catchment_id': catchment_id}])
         self.pg_conn.commit()        
