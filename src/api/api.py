@@ -121,15 +121,15 @@ class backendApi:
         async def configuration():
             """Returns the global configuration object that contains possible values the user can choose from in the front-end.
             """
-            # res = await asyncio.gather(
-            #     cities(),
-            #     times_of_day(),
-            #     poi_categories(),
-            #     demographic_categories(),
-            # )
+            res = await asyncio.gather(
+                cities(),
+                times_of_day(),
+                poi_categories(),
+                demographic_categories(),
+            )
 
             labels = ['cities', 'times_of_day', 'poi_categories', 'demographic_categories']
-            res = [[{'id': 1, 'name': 'Atlanta'}], ['morning'], ['Schools and Kindergartners', 'Grocery stores and supermarkets', 'Cinemas and Theaters', 'Clinics and Hospitals', 'Restaurants', 'Vaccination centre'], ['Race', 'Age and Sex', 'Income', 'Origin', 'Vehicle Availability']]
+            # res = [[{'id': 1, 'name': 'Atlanta'}], ['morning'], ['Schools and Kindergartners', 'Grocery stores and supermarkets', 'Cinemas and Theaters', 'Clinics and Hospitals', 'Restaurants', 'Vaccination centre'], ['Race', 'Age and Sex', 'Income', 'Origin', 'Vehicle Availability']]
             config_values = dict(zip(labels, res))
             return config_values
 
