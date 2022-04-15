@@ -64,6 +64,7 @@ class IsochroneService():
         if response.status_code == 200:
             df = gpd.read_file(response.text)
             isochrone = df.loc[0, 'geometry']
+            real = True
             
         elif response.status_code == 500 and response.text == no_route:
             #return the shape of the h3 cell and its' neighbours
@@ -71,8 +72,12 @@ class IsochroneService():
             neighbours = h3.k_ring(h3_origin, 1)
             polygon = h3.h3_set_to_multi_polygon(neighbours, geo_json=True)
             isochrone =  MultiPolygon([Polygon(polygon[0][0])])
+            real = False
+
+        else:
+            raise RuntimeError(response.text)
         
-        return isochrone
+        return isochrone, real
 
 
     def get_isochrone(self, city_id, h3_id, time='morning', minutes=30):
@@ -101,9 +106,9 @@ class IsochroneService():
         
         #compute the isochrone,save to DB and return
         else:
-            cityname = result[0].lower()                
+            cityname = result[0].lower().replace(" ", "_")                
             lat, lon = h3.h3_to_geo(h3_id)                
-            isochrone = self.compute_isochrone(lat, lon, cityname, time, minutes)
+            isochrone, real = self.compute_isochrone(lat, lon, cityname, time, minutes)
 
             #save the isochrone to database
             metadata = MetaData(bind=self.pg_conn, schema='public')
@@ -114,7 +119,8 @@ class IsochroneService():
                 {"timeofday": time,
                 "timedistance" : minutes,
                 "geometry": from_shape(isochrone),
-                "originh3id":h3_id}
+                "originh3id":h3_id,
+                "real": real}
             ]
             res = self.pg_conn.execute(catchments.insert(), vals)
             catchment_id = res.inserted_primary_key[0]
