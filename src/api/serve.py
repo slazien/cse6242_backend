@@ -5,5 +5,5 @@ import api
 # uvicorn serve:app --reload --port 8001 
 
 config = configparser.ConfigParser()
-config.read("../../config.ini")    
+config.read("../../config.ini.sample")    
 app = api.backendApi(dict(config['DB'])).get_app()

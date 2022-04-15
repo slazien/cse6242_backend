@@ -121,16 +121,16 @@ class backendApi:
         async def configuration():
             """Returns the global configuration object that contains possible values the user can choose from in the front-end.
             """
-            res = await asyncio.gather(
-                cities(),
-                times_of_day(),
-                poi_categories(),
-                demographic_categories(),
-            )
+            # res = await asyncio.gather(
+            #     cities(),
+            #     times_of_day(),
+            #     poi_categories(),
+            #     demographic_categories(),
+            # )
 
             labels = ['cities', 'times_of_day', 'poi_categories', 'demographic_categories']
+            res = [[{'id': 1, 'name': 'Atlanta'}], ['morning'], ['Schools and Kindergartners', 'Grocery stores and supermarkets', 'Cinemas and Theaters', 'Clinics and Hospitals', 'Restaurants', 'Vaccination centre'], ['Race', 'Age and Sex', 'Income', 'Origin', 'Vehicle Availability']]
             config_values = dict(zip(labels, res))
-
             return config_values
 
         class coordinates(BaseModel):
@@ -287,12 +287,15 @@ class backendApi:
             poi_category: str
             demographic_category: str
             time_of_day: str
+            city_id: int
 
         class DataFields(str, Enum):
             pois = 'poi_category'
             demographics = 'demographic_category'
             poi_list = 'poi_list' 
             time_of_day = 'time_of_day'
+            poi_add = 'poi_add'
+            poi_remove = 'poi_remove'
 
         class UpdatedPois(BaseModel):
             added: Optional[List[str]]
@@ -309,9 +312,10 @@ class backendApi:
             stats: Optional[CityStats]
 
 
-        @app.post("/city_data/{city_id}", response_model=CityData)
-        async def get_city_data(city_id, update_pack: UpdatePack = Body(..., embed=False)):
+        @app.post("/city_data/", response_model=CityData)
+        async def get_city_data(update_pack: UpdatePack = Body(..., embed=False)):
             queries = {}
+            city_id = update_pack.config.city_id
 
             if DataFields.demographics in update_pack.changed:
                 queries['demographics'] = get_city_demographics(
@@ -321,7 +325,7 @@ class backendApi:
                     native=True
                 )
             
-            if DataFields.pois in update_pack.changed or update_pack.poi_list.deleted:
+            if DataFields.pois in update_pack.changed or DataFields.poi_remove in update_pack.changed:
                 queries['pois'] = get_pois_in_city(
                     city_id = city_id, 
                     poi_category= update_pack.config.poi_category,
