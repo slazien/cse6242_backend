@@ -348,6 +348,31 @@ class backendApi:
                     pois_added=update_pack.poi_list.added,
                     pois_removed=update_pack.poi_list.deleted
                 )
+
+            #check if we have isochrones for all POIs that were added
+            #issue requests to create them on the fly as needed
+            if update_pack.poi_list.added:
+                sql = """
+                SELECT h3id FROM (SELECT unnest(%s) as h3id) as a 
+                LEFT JOIN catchments ON h3id = originh3id  AND timeofday = %s
+                WHERE catchmentid IS NULL"""
+                with self.get_db_connection() as conn:                
+                    with conn.cursor(cursor_factory=DictCursor) as cur:
+                        cur.execute(sql, (update_pack.poi_list.added, update_pack.config.time_of_day))
+                        new_pois = cur.fetchall()
+                        new_catchs = []
+                        
+                        for p in new_pois:
+                            new_catchs.append(
+                                get_catchment_details(
+                                    city_id = update_pack.config.city_id,
+                                    h3_id= p[0],
+                                    time_of_day= update_pack.config.time_of_day,
+                                    demographics_category=update_pack.config.demographic_category
+                                )
+                            )
+                        
+                await asyncio.gather(*new_catchs)
                             
             results = await asyncio.gather(*queries.values())            
             dict_results = dict(zip(queries.keys(), results))
