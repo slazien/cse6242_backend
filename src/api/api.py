@@ -65,7 +65,7 @@ class backendApi:
         
         class City(BaseModel):
             name: str
-            id: int
+            id: int            
 
         
         @app.get("/cities", response_model=List[City])
@@ -76,7 +76,11 @@ class backendApi:
                 with conn.cursor() as cur:
                     cur.execute("SELECT cityID, cityname FROM cities")
                     data = cur.fetchall()
-            citiesList = [{"id": d[0], "name": d[1]} for d in data]            
+                    print(data)
+            citiesList = [{
+                "id": d[0], 
+                "name": d[1],                 
+                } for d in data]            
             return citiesList
 
         
@@ -310,6 +314,8 @@ class backendApi:
             demographics: Optional[H3List]
             pois: Optional[POIList]
             stats: Optional[CityStats]
+            lat: float
+            long: float
 
 
         @app.post("/city_data/", response_model=CityData)
@@ -345,6 +351,15 @@ class backendApi:
                             
             results = await asyncio.gather(*queries.values())            
             dict_results = dict(zip(queries.keys(), results))
+
+            with self.get_db_connection() as conn:                
+                with conn.cursor(cursor_factory=DictCursor) as cur:                    
+                    sql = 'SELECT boundingbox FROM cities WHERE cityid = %s'
+                    cur.execute(sql, (city_id, ))
+                    bbox = cur.fetchone()[0]
+                    dict_results['long'] = (bbox[0] + bbox[2]) / 2
+                    dict_results['lat'] = (bbox[1] + bbox[3]) / 2
+
             return PydanticJSONResponse(content=CityData.construct(** dict_results))
             
         return app
