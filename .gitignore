@@ -139,3 +139,6 @@ cache/
 
 #config files
 *.ini
+
+# pipenv
+Pipfile
