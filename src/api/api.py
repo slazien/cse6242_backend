@@ -195,6 +195,14 @@ class backendApi:
             with self.get_db_connection() as conn:                
                 with conn.cursor(cursor_factory=DictCursor) as cur:
                     if detailed:
+
+                        new_sql = """
+                        SELECT d.h3id, d.groupname, d.population, a.accessibility 
+                        FROM api_get_demographics_for_city(1, 'Race') as d
+                        LEFT JOIN accessibility_stats a ON d.h3id = a.h3id
+                        WHERE a.cityid = 1 AND a.categorytype = 'Race' AND a.timeofday = 'morning' and a.poi_category = 'Restaurants'
+                        """
+
                         sql = 'SELECT h3id, groupname, population from api_get_demographics_for_city(%s, %s)'
                     else:
                         sql = "SELECT h3id, 'total' as groupname, SUM(population) as population from api_get_demographics_for_city(%s, %s) GROUP BY h3id"
