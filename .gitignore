@@ -142,3 +142,6 @@ cache/
 
 # pipenv
 Pipfile
+
+#otp graphs
+otp/graphs

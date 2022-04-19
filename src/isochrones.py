@@ -5,6 +5,7 @@ import requests
 import geopandas as gpd
 import h3
 from shapely.geometry import Polygon, MultiPolygon, mapping
+from sqlalchemy import text
 
 class IsochroneService():
 
@@ -63,6 +64,7 @@ class IsochroneService():
         if response.status_code == 200:
             df = gpd.read_file(response.text)
             isochrone = df.loc[0, 'geometry']
+            real = True
             
         elif response.status_code == 500 and response.text == no_route:
             #return the shape of the h3 cell and its' neighbours
@@ -70,11 +72,15 @@ class IsochroneService():
             neighbours = h3.k_ring(h3_origin, 1)
             polygon = h3.h3_set_to_multi_polygon(neighbours, geo_json=True)
             isochrone =  MultiPolygon([Polygon(polygon[0][0])])
+            real = False
+
+        else:
+            raise RuntimeError(response.text)
         
-        return isochrone
+        return isochrone, real
 
 
-    def get_isochrone(self, city_id, poi_id, time='morning', minutes=30):
+    def get_isochrone(self, city_id, h3_id, time='morning', minutes=30):
         
         assert time in self.times, "Invalid time category. Provided {}, should be one of {}".format(time, ", ".join(self.times))        
         assert self.pg_conn is not None, "No Postgres connection available"
@@ -82,57 +88,129 @@ class IsochroneService():
         #retrieve H3 index and city name of the given POI
         with self.pg_conn.connection.cursor() as cur:
             cur.execute("""
-                SELECT cityName, pois.h3id, catchments.catchmentid, catchments.geometry FROM cities 
-                    JOIN cityh3map ON cities.cityid = cityh3map.cityid 
-                    JOIN pois on pois.h3id = cityh3map.h3id
-                    LEFT JOIN catchments ON pois.h3id = catchments.originh3id
+                SELECT cityName, catchments.originh3id, catchments.catchmentid, catchments.geometry FROM cities 
+                    JOIN cityh3map ON cities.cityid = cityh3map.cityid                     
+                    LEFT JOIN catchments ON cityh3map.h3id = catchments.originh3id
                     WHERE 
-                        (cities.cityid = %s) and (pois.poiid = %s) and 
-                        (timeofday = %s OR timeofday is NULL) and 
-                        (timedistance = %s OR timedistance is NULL)
-                """, (city_id, poi_id, time, minutes)
+                        cities.cityid = %s and (catchments.originh3id = %s OR catchments.originh3id IS NULL) and
+                        (timeofday = %s OR timeofday IS NULL) and (timedistance = %s OR timedistance IS NULL)
+                """, (city_id, h3_id, time, minutes)
             )
 
             result = cur.fetchone()
-            assert result is not None, "The POI with id {} does not exist in city {}, please check".format(poi_id, city_id)
-
-            h3id = result[1]
+                                
+        #isochrone already in DB - return
+        if result[1] is not None:                
+            isochrone = to_shape(WKBElement(result[3]))
             catchment_id = result[2]
-
-            #isochrone already in DB - return
-            if catchment_id is not None:                
-                isochrone = to_shape(WKBElement(result[3]))
-            
-            #compute the isochrone,save to DB and return
-            else:
-                cityname = result[0].lower()                
-                lat, lon = h3.h3_to_geo(h3id)                
-                isochrone = self.compute_isochrone(lat, lon, cityname, time, minutes)
-
-                #save the isochrone to database
-                metadata = MetaData(bind=self.pg_conn, schema='public')
-                metadata.reflect(only=['catchments', 'catchmenth3map'])
-                catchments = Table('catchments', metadata)
-                
-                vals = [ 
-                    {"timeofday": time,
-                    "timedistance" : minutes,
-                    "geometry": from_shape(isochrone),
-                    "originh3id":h3id}
-                ]
-                res = self.pg_conn.execute(catchments.insert(), vals)
-                catchment_id = res.inserted_primary_key[0]
-
-                #find all h3 indices in the isochrone and save them to DB, too
-                h3s = [h3.polyfill_geojson(mapping(polygon), res=self.h3_resolution) for polygon in isochrone.geoms]
-                h3s = set().union(*h3s)
-                
-
-                catchment_map = Table('catchmenth3map', metadata)
-                self.pg_conn.execute(
-                    catchment_map.insert(), 
-                    [{"catchmentid": catchment_id, "h3id" : h} for h in h3s]
-                )
-
-            return isochrone, h3id, catchment_id
         
+        #compute the isochrone,save to DB and return
+        else:
+            cityname = result[0].lower().replace(" ", "_")                
+            lat, lon = h3.h3_to_geo(h3_id)                
+            isochrone, real = self.compute_isochrone(lat, lon, cityname, time, minutes)
+
+            #save the isochrone to database
+            metadata = MetaData(bind=self.pg_conn, schema='public')
+            metadata.reflect(only=['catchments', 'catchmenth3map'])
+            catchments = Table('catchments', metadata)
+            
+            vals = [ 
+                {"timeofday": time,
+                "timedistance" : minutes,
+                "geometry": from_shape(isochrone),
+                "originh3id":h3_id,
+                "real": real}
+            ]
+            res = self.pg_conn.execute(catchments.insert(), vals)
+            catchment_id = res.inserted_primary_key[0]
+
+            #find all h3 indices in the isochrone and save them to DB, too
+            h3s = [h3.polyfill_geojson(mapping(polygon), res=self.h3_resolution) for polygon in isochrone.geoms]
+            h3s = set().union(*h3s)
+            
+
+            catchment_map = Table('catchmenth3map', metadata)
+            self.pg_conn.execute(
+                catchment_map.insert(), 
+                [{"catchmentid": catchment_id, "h3id" : h} for h in h3s]
+            )
+            self.pg_conn.commit()
+            #calculate catchment statistics and add them to the catchment_stats table and step1_stats table, too
+            self.update_stats(catchment_id)                
+
+        return isochrone, h3_id, catchment_id
+    
+    def update_stats(self, catchment_id):
+        
+        catchment_stats = """
+        WITH all_h3_ids as (
+            SELECT 		
+                h3demographics.categorytype,
+                h3demographics.h3id, 
+                h3demographics.groupname, 
+                h3demographics.population 
+            FROM h3demographics
+        ),
+
+        catchmenth3_ids AS (
+            SELECT 
+                catchments.catchmentid,
+                catchmenth3map.h3id
+            FROM catchments
+            JOIN catchmenth3map ON catchmenth3map.catchmentid = catchments.catchmentid WHERE catchments.catchmentid = :catchment_id
+        )
+
+        INSERT INTO catchment_stats (catchmentid, categorytype, groupname, population)
+            SELECT c.catchmentid, h.categorytype, h.groupname, SUM(h.population)
+                FROM all_h3_ids as h
+                JOIN catchmenth3_ids as c ON c.h3id = h.h3id
+                GROUP BY c.catchmentid, h.categorytype, h.groupname;
+        
+        """
+
+        step1_stats = """
+        WITH step1 AS (
+                SELECT 
+                        c3m.h3id,                
+                        catchments.timeofday,
+                        catchments.catchmentid,
+                        catchment_stats.categorytype,		 
+                        CASE 
+                            WHEN SUM(catchment_stats.population) = 0
+                            THEN 0 
+                            ELSE 10000 / SUM(catchment_stats.population) 
+                            END AS ratio
+                FROM catchments
+                JOIN catchment_stats
+                    ON catchment_stats.catchmentid = catchments.catchmentid                
+                JOIN catchmenth3map c3m 
+                    ON catchment_stats.catchmentid = c3m.catchmentid
+                WHERE c3m.catchmentid = :catchment_id
+                GROUP BY 
+                    c3m.h3id,                
+                    catchments.timeofday,
+                    catchments.catchmentid,
+                    catchment_stats.categorytype
+            )
+            
+            INSERT INTO step1_stats 
+            (h3id,		
+                    timeofday,
+                    categorytype,			
+                    catchmentid,
+                    ratio
+            )
+                SELECT 
+                    h3id,		
+                    timeofday,
+                    categorytype,			
+                    catchmentid,
+                    ratio
+                FROM step1
+        """        
+    
+        self.pg_conn.execute(text(catchment_stats), [{'catchment_id': catchment_id}])
+        self.pg_conn.commit()        
+        self.pg_conn.execute(text(step1_stats), [{'catchment_id': catchment_id}])
+        self.pg_conn.commit()
