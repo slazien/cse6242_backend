@@ -182,12 +182,13 @@ class backendApi:
             h3id: str
             data: Optional[dict]
             total: float
+            accessibility: float
 
         class H3List(BaseModel):
             data: List[H3Grid]        
 
-        @app.get("/demographics/{city_id}/{demographics_category}", response_model=H3List)
-        async def get_city_demographics(city_id: int, demographics_category: str, detailed: int = 0, native: bool = False):
+        @app.get("/demographics/{city_id}/{demographics_category}/{poi_category}/{time_of_day}", response_model=H3List)
+        async def get_city_demographics(city_id: int, demographics_category: str, poi_category: Optional[str], time_of_day: Optional[str], detailed: int = 0, native: bool = False):
             """ Returns requested demographic data for all H3 cells in the city. 
             Use detailed=False to retrieve totals per h3cell for initial drawing and detailed=True to get details by category for tooltips.
             """
@@ -195,18 +196,17 @@ class backendApi:
             with self.get_db_connection() as conn:                
                 with conn.cursor(cursor_factory=DictCursor) as cur:
                     if detailed:
-
-                        new_sql = """
-                        SELECT d.h3id, d.groupname, d.population, a.accessibility 
-                        FROM api_get_demographics_for_city(1, 'Race') as d
+                        # sql = 'SELECT h3id, groupname, population from api_get_demographics_for_city(%s, %s)'
+                        sql = """
+                        SELECT d.h3id AS h3id, d.groupname AS groupname, d.population AS population, a.accessibility AS accessibility
+                        FROM api_get_demographics_for_city(%s, %s) as d
                         LEFT JOIN accessibility_stats a ON d.h3id = a.h3id
-                        WHERE a.cityid = 1 AND a.categorytype = 'Race' AND a.timeofday = 'morning' and a.poi_category = 'Restaurants'
+                        WHERE a.cityid = %s AND a.categorytype = %s AND a.timeofday = %s and a.poi_category = %s;
                         """
-
-                        sql = 'SELECT h3id, groupname, population from api_get_demographics_for_city(%s, %s)'
+                        cur.execute(sql, (city_id, demographics_category, city_id, demographics_category, time_of_day, poi_category))
                     else:
                         sql = "SELECT h3id, 'total' as groupname, SUM(population) as population from api_get_demographics_for_city(%s, %s) GROUP BY h3id"
-                    cur.execute(sql, (city_id, demographics_category))
+                        cur.execute(sql, (city_id, demographics_category))
                     response = {}
                     data = cur.fetchall()
 
@@ -223,8 +223,10 @@ class backendApi:
                         if detailed:
                             groupname = row['groupname']
                             population = row['population']
+                            accessibility = row["accessibility"]
                             response[id].data[groupname] = population
                             response[id].total += population
+                            response[id].accessibility = accessibility
                     
                     response = H3List.construct(data = list(response.values()))
                         
@@ -335,6 +337,8 @@ class backendApi:
                 queries['demographics'] = get_city_demographics(
                     city_id=city_id, 
                     demographics_category=update_pack.config.demographic_category, 
+                    poi_category=update_pack.config.poi_category,
+                    time_of_day=update_pack.config.time_of_day,
                     detailed=True,
                     native=True
                 )

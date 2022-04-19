@@ -140,5 +140,8 @@ cache/
 #config files
 *.ini
 
+# pipenv
+Pipfile
+
 #otp graphs
 otp/graphs
