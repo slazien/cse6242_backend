@@ -201,7 +201,7 @@ class backendApi:
                         SELECT d.h3id AS h3id, d.groupname AS groupname, d.population AS population, a.accessibility AS accessibility
                         FROM api_get_demographics_for_city(%s, %s) as d
                         LEFT JOIN accessibility_stats a ON d.h3id = a.h3id
-                        WHERE a.cityid = %s AND a.categorytype = %s AND a.timeofday = %s and a.poi_category = %s;
+                        AND a.cityid = %s AND a.categorytype = %s AND a.timeofday = %s and a.poi_category = %s;
                         """
                         cur.execute(sql, (city_id, demographics_category, city_id, demographics_category, time_of_day, poi_category))
                     else:
