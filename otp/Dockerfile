@@ -1,4 +1,4 @@
-#DOCKER STUFF
+#DOCKER BASE
 FROM openjdk:11
 
 #STATIC
@@ -71,7 +71,7 @@ RUN osmconvert $ROUTER_PATH/base.pbf -b=$BOUNDING_BOX --complete-ways -o=$ROUTER
 # BUILD OTP GRAPH
 RUN java -Xmx4G -jar ./otp.jar --build $ROUTER_PATH
 
-ENV CITY=LA
+ENV CITY=los_angeles
 ENV GTFS_URL_dot=https://ladotbus.com/gtfs
 ENV GTFS_URL_go=http://data.trilliumtransit.com/gtfs/dpwlacounty-ca-us/dpwlacounty-ca-us.zip
 ENV GTFS_URL_metro_bus=https://gitlab.com/LACMTA/gtfs_bus/raw/master/gtfs_bus.zip
@@ -98,7 +98,7 @@ RUN osmconvert $ROUTER_PATH/base.pbf -b=$BOUNDING_BOX --complete-ways -o=$ROUTER
 # BUILD OTP GRAPH
 RUN java -Xmx4G -jar ./otp.jar --build $ROUTER_PATH
 
-ENV CITY=NYC
+ENV CITY=new_york
 ENV GTFS_URL_mta_bronx=http://web.mta.info/developers/data/nyct/bus/google_transit_bronx.zip
 ENV GTFS_URL_mta_brklyn=http://web.mta.info/developers/data/nyct/bus/google_transit_brooklyn.zip
 ENV GTFS_URL_mta_mnhttn=http://web.mta.info/developers/data/nyct/bus/google_transit_manhattan.zip
@@ -132,6 +132,8 @@ RUN osmconvert $ROUTER_PATH/base.pbf -b=$BOUNDING_BOX --complete-ways -o=$ROUTER
 RUN java -Xmx4G -jar ./otp.jar --build $ROUTER_PATH
 
 #SERVE
-CMD java -Xmx4G -jar ./otp.jar --basePath $BASE_PATH --server --router $CITY
-EXPOSE 8080
-EXPOSE 8081
+CMD java -Xmx5G -jar ./otp.jar --basePath otp/ --server --port 8062 --securePort 8802 \
+--router atlanta --router dallas --router new_york --router los_angeles --router chicago
+
+EXPOSE 8062
+EXPOSE 8802
