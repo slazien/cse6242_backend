@@ -11,7 +11,7 @@ import isochrones as isc
 import configparser
 
 config = configparser.ConfigParser()
-config.read("../../../config.ini")    
+config.read("../../../config/config.ini")    
 db_params = config['DB']
 opt_params = config['OTP']
 
@@ -24,7 +24,7 @@ timedistances = [30]
 cities = ['Atlanta', 'Dallas', 'Los Angeles', 'New York', 'Chicago']
 
 with engine.connect() as conn:
-    service = isc.IsochroneService(otp_port=opt_params['port'], pg_conn=conn, reference_date = opt_params['ref_date'])
+    service = isc.IsochroneService(otp_port=opt_params['port'], pg_conn=conn, reference_date = opt_params['ref_date'], otp_host=opt_params['host'])
 
     for timedist, timeofday, city in tqdm(list(itt.product(timedistances, types, cities))):
         with conn.connection.cursor() as cur:
