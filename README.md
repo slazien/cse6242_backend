@@ -1,4 +1,3 @@
-# cse6242_backend
-Code for backend for CSE6242 group project
+# The Ease and Equity of Point of Interest Accessibility via Public Transit in Major US Cities
 
-Make sure to store data in the `data/` folder which is part of .gitignore (otherwise we will run into issues with the repo size).
+This is the backend repository of the overall application developed as a course project in Georgia Tech's CSE6242 class Data and Visual Analytics. Refer to [the main repository](https://github.com/kamicollo/public-transit-accessibility) for the project overview and background.

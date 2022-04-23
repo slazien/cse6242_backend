@@ -19,7 +19,8 @@ class IsochroneService():
         mode = 'WALK,TRANSIT',
         h3_resolution = 9,
         otp_port = 8801,
-        pg_conn = None
+        pg_conn = None,
+        otp_host= 'localhost',
     ):
         if pg_conn is None:
             print("Postgress connection not provided, can only use compute_isochrone() function")
@@ -35,6 +36,7 @@ class IsochroneService():
         self.otp_port = otp_port
         self.pg_conn = pg_conn
         self.h3_resolution = h3_resolution
+        self.otp_host = otp_host
     
 
     def compute_isochrone(self, lat, lon, city='atlanta', time='morning', minutes=30):
@@ -43,7 +45,7 @@ class IsochroneService():
         assert time in self.times, "Invalid time category. Provided {}, should be one of {}".format(time, ", ".join(self.times))
         time_spec = self.times[time]
 
-        api_endpoint = 'http://localhost:{}/otp/routers/{}/isochrone'.format(self.otp_port, city)    
+        api_endpoint = 'http://{}:{}/otp/routers/{}/isochrone'.format(self.otp_host, self.otp_port, city)    
 
         response = requests.get(
             api_endpoint,
