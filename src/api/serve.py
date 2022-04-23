@@ -3,4 +3,4 @@ import api
 
 config = configparser.ConfigParser()
 config.read("../../config/config.ini")    
-app = api.backendApi(dict(config['DB'])).get_app()
+app = api.backendApi(dict(config['DB']), dict(config['OTP'])).get_app()

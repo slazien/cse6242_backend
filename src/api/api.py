@@ -43,14 +43,16 @@ class PydanticJSONResponse(JSONResponse):
         return content.encode(self.charset)
 
 class backendApi:
-    def __init__(self, db_params, otp_port = 8062) -> None:
+    def __init__(self, db_params, otp_params) -> None:
         assert 'dbname' in db_params, "Database parameters do not include 'dbname'"
         assert 'user' in db_params, "Database parameters do not include 'user'"
         assert 'password' in db_params, "Database parameters do not include 'password'"
         assert 'host' in db_params, "Database parameters do not include 'host'"
         assert 'port' in db_params, "Database parameters do not include 'port'"
         self.db_params = db_params
-        self.otp_port = otp_port
+        self.otp_port = otp_params['port']
+        self.otp_host = otp_params['host']
+        self.otp_ref_date = otp_params['ref_date']
 
     
     def get_db_connection(self):
@@ -252,7 +254,7 @@ class backendApi:
         async def get_catchment_details(city_id, h3_id, time_of_day, demographics_category):
             """ Returns catchment area geometry and associated population details"""
             with self.get_alchemy_engine().connect() as conn:
-                service = isc.IsochroneService(otp_port=8062, pg_conn=self.get_alchemy_engine().connect()   )    
+                service = isc.IsochroneService(otp_port=self.otp_port, pg_conn=self.get_alchemy_engine().connect(), otp_host=self.otp_host, reference_date=self.otp_ref_date)    
                 isochrone, origin_h3id, catchment_id = service.get_isochrone(city_id = city_id, h3_id = h3_id, time=time_of_day)
                 
                 with conn.connection.cursor(cursor_factory=DictCursor) as cur:
