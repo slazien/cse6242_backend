@@ -111,7 +111,7 @@ class backendApi:
             """
             with self.get_db_connection() as conn:
                 with conn.cursor() as cur:
-                    cur.execute("SELECT DISTINCT CategoryType FROM demographics")
+                    cur.execute("SELECT DISTINCT categorytype FROM h3demographics")
                     data = cur.fetchall()              
             return [d[0] for d in data]
 
