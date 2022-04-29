@@ -1,3 +1,4 @@
+altair==4.2.0
 anyio==3.5.0
 argon2-cffi==21.3.0
 argon2-cffi-bindings==21.2.0
@@ -14,6 +15,7 @@ charset-normalizer==2.0.12
 click==8.1.2
 click-plugins==1.1.1
 cligj==0.7.2
+colormath==3.0.0
 cycler==0.11.0
 debugpy==1.5.1
 decorator==5.1.1
@@ -56,6 +58,7 @@ nbclient==0.5.13
 nbconvert==6.4.5
 nbformat==5.3.0
 nest-asyncio==1.5.1
+networkx==2.8
 notebook==6.4.10
 numpy==1.22.3
 orjson==3.6.7
@@ -95,12 +98,14 @@ six==1.16.0
 sklearn==0.0
 sniffio==1.2.0
 soupsieve==2.3.2
+spectra==0.0.11
 SQLAlchemy==1.4.34
 stack-data==0.2.0
 starlette==0.17.1
 terminado==0.13.3
 testpath==0.6.0
 threadpoolctl==3.1.0
+toolz==0.11.2
 tornado==6.1
 tqdm==4.64.0
 traitlets==5.1.1
